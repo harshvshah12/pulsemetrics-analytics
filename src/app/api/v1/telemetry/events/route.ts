@@ -30,7 +30,8 @@ export async function GET(request: Request) {
   if (service) query = query.eq("service", service.slice(0, 100));
   if (severity && ["debug", "info", "warn", "error", "critical"].includes(severity)) query = query.eq("severity", severity);
   if (status && /^\d{3}$/.test(status)) query = query.eq("status_code", Number(status));
-  if (search) query = query.ilike("message", "%" + search.replace(/[%_]/g, "") + "%");
+  const safeSearch = search?.replace(/[^\p{L}\p{N}\s_.:-]/gu, " ").trim();
+  if (safeSearch) query = query.ilike("message", "%" + safeSearch + "%");
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: "Events could not be loaded." }, { status: 503 });
