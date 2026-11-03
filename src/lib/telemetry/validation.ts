@@ -9,7 +9,7 @@ export const telemetryEventSchema = z.object({
   latency_ms: z.number().finite().min(0).max(3600000).optional(),
   occurred_at: z.string().optional(),
   region: z.string().trim().max(40).optional(),
-  attributes: z.record(z.unknown()).default({}),
+  attributes: z.record(z.string(), z.unknown()).default({}),
 }).strict().superRefine((event, ctx) => {
   if (event.occurred_at && Number.isNaN(Date.parse(event.occurred_at))) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["occurred_at"], message: "occurred_at must be a valid date." });
