@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getWorkspaceContext } from "@/lib/auth";
+import { getWorkspaceAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ function getRangeStart(range: string): string {
 }
 
 export async function GET(request: Request) {
-  const context = await getWorkspaceContext();
+  const context = await getWorkspaceAccess(request, "telemetry:read");
   if (!context.ok) return NextResponse.json({ error: context.error, code: context.code }, { status: context.status });
 
   const params = new URL(request.url).searchParams;
