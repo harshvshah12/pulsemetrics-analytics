@@ -86,6 +86,13 @@ export async function getWorkspaceAccess(request: Request, requiredScope: string
       return { ok: false, status: 403, code: "insufficient_scope", error: "This API key does not have the required " + requiredScope + " permission." };
     }
 
+    const { data: rateAllowed, error: rateError } = await admin.rpc("consume_pulsemetrics_rate_limit", {
+      p_api_key_id: key.id,
+      p_limit: 120,
+    });
+    if (rateError) return { ok: false, status: 503, code: "rate_limit_unavailable", error: "API rate limiting is not configured. Apply the latest database schema." };
+    if (!rateAllowed) return { ok: false, status: 429, code: "rate_limit_exceeded", error: "This API key has exceeded 120 requests per minute." };
+
     const { data: workspace, error: workspaceError } = await admin.from("workspaces")
       .select("id, name, slug, monthly_event_quota")
       .eq("id", key.workspace_id)
