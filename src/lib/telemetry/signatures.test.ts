@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { hashApiSecret, safeDigestMatch, verifyHmacSignature } from "@/lib/telemetry/signatures";
+import { hashApiSecret, safeDigestMatch, verifyHmacSignature } from "./signatures";
 
 describe("telemetry request security", () => {
   it("hashes and compares API secrets without storing plaintext", () => {
