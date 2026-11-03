@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Activity, AlertTriangle, ArrowDownToLine, Check, Copy, KeyRound, RefreshCw, Server, ShieldAlert, Wifi, WifiOff } from "lucide-react";
+import { Activity, AlertTriangle, Check, Copy, KeyRound, RefreshCw, Server, ShieldAlert, Wifi, WifiOff } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
 type EventRow = {
@@ -181,7 +181,7 @@ export function DashboardClient({ workspaceId, workspaceName, role }: { workspac
 
       {error && <div role="alert" className="flex gap-3 p-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 text-rose-200 text-sm"><AlertTriangle className="w-5 h-5 shrink-0" />{error}</div>}
 
-      <section className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      <section className="grid grid-cols-2 xl:grid-cols-5 gap-4">
         {[
           { label: "Events received", value: formatNumber(metrics.totalEvents), icon: Activity, hint: range + " · stored records" },
           { label: "Error events", value: formatNumber(metrics.errorCount), icon: ShieldAlert, hint: metrics.totalEvents ? metrics.errorRate.toFixed(2) + "% of events" : "No data for this period" },
