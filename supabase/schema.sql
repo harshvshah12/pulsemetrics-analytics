@@ -435,3 +435,59 @@ from current_bucket cross join baseline;
 $$;
 revoke all on function public.pulsemetrics_anomaly_summary(uuid, timestamptz) from public, anon, authenticated;
 grant execute on function public.pulsemetrics_anomaly_summary(uuid, timestamptz) to service_role;
+
+
+-- Per-key request throttling: one atomic fixed-window counter per API key.
+create table if not exists public.api_key_rate_limits (
+  api_key_id uuid primary key references public.api_keys(id) on delete cascade,
+  window_start timestamptz not null default date_trunc('minute', now()),
+  request_count integer not null default 0 check (request_count >= 0),
+  updated_at timestamptz not null default now()
+);
+alter table public.api_key_rate_limits enable row level security;
+revoke all on public.api_key_rate_limits from anon, authenticated;
+
+create or replace function public.consume_pulsemetrics_rate_limit(p_api_key_id uuid, p_limit integer default 120)
+returns boolean
+language plpgsql
+security invoker
+set search_path = public, pg_temp
+as $$
+declare
+  current_count integer;
+  current_window timestamptz := date_trunc('minute', now());
+begin
+  insert into public.api_key_rate_limits (api_key_id, window_start, request_count)
+  values (p_api_key_id, current_window, 1)
+  on conflict (api_key_id) do update
+    set window_start = case
+          when api_key_rate_limits.window_start < current_window then current_window
+          else api_key_rate_limits.window_start
+        end,
+        request_count = case
+          when api_key_rate_limits.window_start < current_window then 1
+          else api_key_rate_limits.request_count + 1
+        end,
+        updated_at = now()
+  returning request_count into current_count;
+  return current_count <= greatest(1, least(p_limit, 1000));
+end;
+$$;
+revoke all on function public.consume_pulsemetrics_rate_limit(uuid, integer) from public, anon, authenticated;
+grant execute on function public.consume_pulsemetrics_rate_limit(uuid, integer) to service_role;
+
+-- Compensate a quota reservation if persistence fails after the atomic check.
+create or replace function public.release_pulsemetrics_quota(p_workspace_id uuid, p_count bigint)
+returns void
+language sql
+security invoker
+set search_path = public, pg_temp
+as $$
+  update public.ingestion_usage
+  set event_count = greatest(0, event_count - greatest(0, p_count)),
+      updated_at = now()
+  where workspace_id = p_workspace_id
+    and period_start = date_trunc('month', now())::date;
+$$;
+revoke all on function public.release_pulsemetrics_quota(uuid, bigint) from public, anon, authenticated;
+grant execute on function public.release_pulsemetrics_quota(uuid, bigint) to service_role;
