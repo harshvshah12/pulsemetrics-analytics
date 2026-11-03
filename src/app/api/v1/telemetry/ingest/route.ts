@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createEmbedding } from "@/lib/telemetry/embeddings";
+import { createEmbeddings } from "@/lib/telemetry/embeddings";
+import { getEmbeddingConfig } from "@/lib/env";
 import { safeDigestMatch, verifyHmacSignature } from "@/lib/telemetry/signatures";
 import { telemetryEventSchema } from "@/lib/telemetry/validation";
 import { evaluateWorkspaceAlerts } from "@/lib/alerts/evaluate";
@@ -133,19 +134,24 @@ export async function POST(request: Request) {
 
   let indexed = 0;
   let indexingFailed = false;
-  for (const event of inserted || []) {
+  const insertedEvents = inserted || [];
+  const embeddingConfig = getEmbeddingConfig();
+  if (embeddingConfig.configured) {
     try {
-      const text = [event.service, event.event_name, event.message, event.severity].filter(Boolean).join(" ");
-      const embedding = await createEmbedding(text);
-      if (embedding) {
-        const { error } = await admin.from("event_embeddings").upsert({
+      const texts = insertedEvents.map((event) =>
+        [event.service, event.event_name, event.message, event.severity].filter(Boolean).join(" ")
+      );
+      const vectors = await createEmbeddings(texts);
+      if (vectors) {
+        const rows = insertedEvents.map((event, index) => ({
           workspace_id: apiKey.workspace_id,
           event_id: event.id,
-          embedding,
-          model: process.env.EMBEDDING_MODEL || "text-embedding-3-small",
-        }, { onConflict: "event_id" });
+          embedding: vectors[index],
+          model: embeddingConfig.model,
+        }));
+        const { error } = await admin.from("event_embeddings").upsert(rows, { onConflict: "event_id" });
         if (error) indexingFailed = true;
-        else indexed += 1;
+        else indexed = rows.length;
       }
     } catch (error) {
       indexingFailed = true;
@@ -161,7 +167,7 @@ export async function POST(request: Request) {
     accepted: inserted?.length || 0,
     rejected: 0,
     indexed,
-    searchMode: process.env.EMBEDDING_API_KEY ? "vector_when_available" : "keyword_fallback",
+    searchMode: embeddingConfig.configured && indexed === insertedEvents.length ? "semantic" : "keyword_fallback",
     ...(indexingFailed ? { indexingWarning: "Events were persisted but some vector embeddings could not be indexed." } : {}),
     receivedAt: new Date().toISOString(),
   }, 202);
