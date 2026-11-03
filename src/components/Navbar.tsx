@@ -1,20 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Activity, ArrowRight, BellRing, LayoutDashboard, Menu, Search, Shield, X } from "lucide-react";
 
 export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const router = useRouter();
-
-  async function signOut() {
-    await fetch("/api/v1/auth/signout", { method: "POST" });
-    router.push("/");
-    router.refresh();
-  }
-
   const links = [
     { href: "/dashboard", label: "Telemetry", icon: LayoutDashboard },
     { href: "/search", label: "Search", icon: Search },
