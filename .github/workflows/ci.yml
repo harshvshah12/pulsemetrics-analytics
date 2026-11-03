@@ -1,0 +1,30 @@
+name: Validate PulseMetrics
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Dependency advisory summary
+        run: |
+          npm audit --json > npm-audit.json || true
+          node -e "const report=require('./npm-audit.json'); for (const [name, item] of Object.entries(report.vulnerabilities || {})) { console.log(JSON.stringify({name, severity:item.severity, direct:item.isDirect, range:item.range, fixAvailable:item.fixAvailable})); }"
+      - name: Unit tests
+        run: npm test
+      - name: Type check
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Production build
+        run: npm run build
