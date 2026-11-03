@@ -1,8 +1,8 @@
 import { getEmbeddingConfig } from "@/lib/env";
 
-export async function createEmbedding(input: string): Promise<number[] | null> {
+export async function createEmbeddings(inputs: string[]): Promise<number[][] | null> {
   const config = getEmbeddingConfig();
-  if (!config.configured || !config.baseUrl || !config.apiKey) return null;
+  if (!config.configured || !config.baseUrl || !config.apiKey || inputs.length === 0) return null;
 
   const endpoint = config.baseUrl.endsWith("/embeddings")
     ? config.baseUrl
@@ -10,16 +10,22 @@ export async function createEmbedding(input: string): Promise<number[] | null> {
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { Authorization: "Bearer " + config.apiKey, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: config.model, input, dimensions: config.dimensions }),
+    body: JSON.stringify({ model: config.model, input: inputs, dimensions: 1536 }),
     cache: "no-store",
-    signal: AbortSignal.timeout(12000),
+    signal: AbortSignal.timeout(15000),
   });
   if (!response.ok) throw new Error("Embedding provider returned HTTP " + response.status + ".");
   const payload = await response.json();
-  const embedding = payload?.data?.[0]?.embedding;
-  if (!Array.isArray(embedding) || embedding.length !== config.dimensions ||
-      !embedding.every((value: unknown) => typeof value === "number" && Number.isFinite(value))) {
-    throw new Error("Embedding provider returned an unexpected vector shape.");
+  const data = payload?.data;
+  if (!Array.isArray(data) || data.length !== inputs.length) {
+    throw new Error("Embedding provider returned an unexpected number of vectors.");
   }
-  return embedding as number[];
+
+  const ordered = [...data].sort((a, b) => Number(a.index) - Number(b.index));
+  const vectors = ordered.map((item) => item.embedding);
+  if (vectors.some((vector: unknown) => !Array.isArray(vector) || vector.length !== 1536 ||
+      !vector.every((value: unknown) => typeof value === "number" && Number.isFinite(value)))) {
+    throw new Error("Embedding provider must return 1536-dimensional vectors.");
+  }
+  return vectors as number[][];
 }
