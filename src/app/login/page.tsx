@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Activity, ArrowRight, LoaderCircle } from "lucide-react";
@@ -16,7 +16,7 @@ export default function LoginPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setError("");
@@ -25,7 +25,7 @@ export default function LoginPage() {
       const supabase = createBrowserSupabaseClient();
       if (mode === "signup") {
         const { data, error: authError } = await supabase.auth.signUp({
-          email, password, options: { data: { workspace_name: workspaceName.trim() || undefined } },
+          email, password, options: { data: { workspace_name: workspaceName.trim() || undefined }, emailRedirectTo: window.location.origin + "/auth/callback" },
         });
         if (authError) throw authError;
         if (data.session) {
