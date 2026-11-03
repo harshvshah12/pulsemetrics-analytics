@@ -187,7 +187,7 @@ export function DashboardClient({ workspaceId, workspaceName, role }: { workspac
           { label: "Error events", value: formatNumber(metrics.errorCount), icon: ShieldAlert, hint: metrics.totalEvents ? metrics.errorRate.toFixed(2) + "% of events" : "No data for this period" },
           { label: "p95 latency", value: metrics.totalEvents ? metrics.p95LatencyMs.toFixed(1) + " ms" : "—", icon: Server, hint: "Based on recorded latency_ms" },
           { label: "Monthly ingestion", value: formatNumber(usage.used) + " / " + formatNumber(usage.quota), icon: KeyRound, hint: usage.percent.toFixed(1) + "% of configured quota" },
-          { label: "Active API keys", value: formatNumber(activeKeys), icon: KeyRound, hint: role === "owner" || role === "admin" ? "Workspace credentials" : "Admin access required" },
+          { label: "Active API keys", value: role === "owner" || role === "admin" ? formatNumber(activeKeys) : "Restricted", icon: KeyRound, hint: role === "owner" || role === "admin" ? "Workspace credentials" : "Admin access required" },
         ].map((item) => (
           <div key={item.label} className="rounded-2xl border border-indigo-950 bg-[#090f20] p-5">
             <div className="flex justify-between items-center text-slate-400 text-xs"><span>{item.label}</span><item.icon className="w-4 h-4 text-cyan-400" /></div>
@@ -221,6 +221,13 @@ export function DashboardClient({ workspaceId, workspaceName, role }: { workspac
             </div>) : <p className="text-sm text-slate-500">Service breakdown appears after the first event arrives.</p>}
           </div>
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-indigo-950 bg-[#090f20] p-5">
+        <div className="flex items-center justify-between gap-3"><div><h2 className="font-semibold text-white">Observed regions</h2><p className="text-xs text-slate-500 mt-1">Region metadata supplied by events or hosting request headers</p></div><span className="text-xs text-slate-500">{metrics.regions.length} regions</span></div>
+        {metrics.regions.length ? <div className="mt-4 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+          {metrics.regions.map((region) => <div key={region.region} className="rounded-xl border border-slate-800 bg-slate-950/40 p-3"><p className="text-sm font-semibold text-white">{region.region}</p><p className="text-xs text-slate-500 mt-1">{formatNumber(region.events)} events</p></div>)}
+        </div> : <p className="text-sm text-slate-500 mt-4">Regional breakdown appears when events include a region or the hosting platform supplies request-region metadata. No edge-node count is inferred.</p>}
       </section>
 
       <section className="rounded-2xl border border-indigo-950 bg-[#090f20] p-5">
