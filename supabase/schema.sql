@@ -68,6 +68,9 @@ create table if not exists public.event_embeddings (
   created_at timestamptz not null default now()
 );
 create index if not exists event_embeddings_workspace_idx on public.event_embeddings(workspace_id);
+-- HNSW makes cosine-similarity search practical as the workspace index grows.
+create index if not exists event_embeddings_hnsw_idx
+  on public.event_embeddings using hnsw (embedding extensions.vector_cosine_ops);
 
 create table if not exists public.alert_rules (
   id uuid primary key default gen_random_uuid(),
@@ -206,9 +209,9 @@ select jsonb_build_object(
   'totalEvents', totals.total_events,
   'errorCount', totals.error_count,
   'errorRate', case when totals.total_events = 0 then 0 else round((totals.error_count::numeric / totals.total_events::numeric) * 100, 3) end,
-  'p50LatencyMs', coalesce(round(totals.p50_latency_ms::numeric, 2), 0),
-  'p95LatencyMs', coalesce(round(totals.p95_latency_ms::numeric, 2), 0),
-  'p99LatencyMs', coalesce(round(totals.p99_latency_ms::numeric, 2), 0),
+  'p50LatencyMs', round(totals.p50_latency_ms::numeric, 2),
+  'p95LatencyMs', round(totals.p95_latency_ms::numeric, 2),
+  'p99LatencyMs', round(totals.p99_latency_ms::numeric, 2),
   'series', coalesce((select jsonb_agg(jsonb_build_object('bucket', bucket, 'events', events, 'errors', errors) order by bucket) from series), '[]'::jsonb),
   'topServices', coalesce((select jsonb_agg(jsonb_build_object('service', service, 'events', events)) from services), '[]'::jsonb),
   'regions', coalesce((select jsonb_agg(jsonb_build_object('region', region, 'events', events)) from regions), '[]'::jsonb)
