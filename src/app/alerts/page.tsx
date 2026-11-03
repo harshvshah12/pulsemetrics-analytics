@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { AlertTriangle, BellRing, CheckCircle2, Pause, Plus, Trash2 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
@@ -44,7 +44,7 @@ export default function AlertsPage() {
 
   useEffect(() => { void load(); }, []);
 
-  async function createRule(event: React.FormEvent<HTMLFormElement>) {
+  async function createRule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setError("");
