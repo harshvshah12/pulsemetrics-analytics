@@ -38,7 +38,12 @@ export async function POST(request: Request) {
     }
   }
 
-  const safeQuery = queryText.replace(/[%_]/g, "");
+  const safeQuery = queryText.replace(/[^\p{L}\p{N}\s_-]/gu, " ").trim();
+  if (!safeQuery) return NextResponse.json({
+    mode: "keyword_fallback",
+    note: "The search query did not contain searchable characters.",
+    results: [],
+  });
   const { data, error } = await admin.from("telemetry_events")
     .select("id, service, event_name, message, severity, status_code, latency_ms, occurred_at, received_at, region")
     .eq("workspace_id", context.workspace.id)
