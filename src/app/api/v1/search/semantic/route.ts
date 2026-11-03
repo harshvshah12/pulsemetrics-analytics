@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getWorkspaceContext } from "@/lib/auth";
+import { getWorkspaceAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createEmbedding } from "@/lib/telemetry/embeddings";
 import { getEmbeddingConfig } from "@/lib/env";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const context = await getWorkspaceContext();
+  const context = await getWorkspaceAccess(request, "telemetry:read");
   if (!context.ok) return NextResponse.json({ error: context.error, code: context.code }, { status: context.status });
 
   const body = await request.json().catch(() => ({}));
