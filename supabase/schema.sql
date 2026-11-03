@@ -2,6 +2,7 @@
 -- Apply once in the SQL Editor of a dedicated Supabase project.
 -- Never expose the service/secret key. All workspace data is protected by RLS.
 
+create schema if not exists extensions;
 create extension if not exists pgcrypto with schema extensions;
 create extension if not exists vector with schema extensions;
 create schema if not exists private;
