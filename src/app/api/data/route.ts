@@ -1,11 +1,18 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
 
 export async function GET() {
   return NextResponse.json({
-    status: 'success',
-    project: "PulseMetrics Cloud Analytics",
-    archetype: "saas",
-    features: ["Real-time event stream console with continuous WebSocket updates","Global edge cluster gauges with sub-15ms latency telemetry","Instant live API token generator modal with scoped access","DuckDB in-memory OLAP analytics topology"],
-    generatedAt: new Date().toISOString()
-  });
+    status: "deprecated",
+    message: "This placeholder endpoint has been retired. Use the persisted, authenticated PulseMetrics v1 APIs.",
+    endpoints: [
+      "/api/health",
+      "/api/v1/telemetry/ingest",
+      "/api/v1/telemetry/events",
+      "/api/v1/analytics/summary",
+      "/api/v1/analytics/anomalies",
+      "/api/v1/api-keys",
+      "/api/v1/alerts/rules",
+      "/api/v1/search/semantic"
+    ]
+  }, { status: 410, headers: { "Cache-Control": "no-store" } });
 }
