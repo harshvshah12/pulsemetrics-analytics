@@ -376,3 +376,62 @@ $$;
 comment on table public.telemetry_events is 'Persisted workspace-scoped telemetry. Product metrics are calculated from these records.';
 comment on table public.api_keys is 'Server-only API key metadata and SHA-256 secret digests; plaintext secrets are never stored.';
 comment on table public.event_embeddings is 'Optional pgvector embeddings from a configured OpenAI-compatible provider.';
+
+
+-- Traffic anomaly detector: compare the current five-minute bucket with twelve
+-- previous five-minute buckets. It reports insufficient data until a baseline
+-- contains enough stored events, rather than manufacturing an anomaly score.
+create or replace function public.pulsemetrics_anomaly_summary(p_workspace_id uuid, p_now timestamptz default now())
+returns jsonb
+language sql
+stable
+security invoker
+set search_path = public, pg_temp
+as $$
+with bucketed as (
+  select floor(extract(epoch from received_at) / 300)::bigint as bucket_id,
+    count(*)::double precision as events,
+    count(*) filter (where severity in ('error', 'critical') or status_code >= 500)::double precision as errors
+  from public.telemetry_events
+  where workspace_id = p_workspace_id
+    and received_at >= p_now - interval '65 minutes'
+    and received_at <= p_now
+  group by 1
+),
+current_bucket as (
+  select coalesce(sum(events), 0)::double precision as events,
+    coalesce(sum(errors), 0)::double precision as errors
+  from bucketed
+  where bucket_id = floor(extract(epoch from p_now) / 300)::bigint
+),
+baseline as (
+  select
+    avg(coalesce(bucketed.events, 0))::double precision as mean_events,
+    coalesce(stddev_samp(coalesce(bucketed.events, 0)), 0)::double precision as std_events,
+    avg(coalesce(bucketed.errors, 0))::double precision as mean_errors,
+    coalesce(stddev_samp(coalesce(bucketed.errors, 0)), 0)::double precision as std_errors,
+    sum(coalesce(bucketed.events, 0))::double precision as baseline_events
+  from generate_series(
+    floor(extract(epoch from p_now) / 300)::bigint - 12,
+    floor(extract(epoch from p_now) / 300)::bigint - 1
+  ) as buckets(bucket_id)
+  left join bucketed on bucketed.bucket_id = buckets.bucket_id
+)
+select jsonb_build_object(
+  'status', case when baseline.baseline_events < 10 then 'insufficient_baseline' else 'analyzed' end,
+  'windowMinutes', 5,
+  'baselineWindows', 12,
+  'baselineEvents', coalesce(baseline.baseline_events, 0),
+  'currentEvents', current_bucket.events,
+  'averageEventsPerWindow', round(coalesce(baseline.mean_events, 0)::numeric, 2),
+  'currentErrors', current_bucket.errors,
+  'averageErrorsPerWindow', round(coalesce(baseline.mean_errors, 0)::numeric, 2),
+  'eventAnomaly', baseline.baseline_events >= 10
+    and current_bucket.events > greatest(baseline.mean_events + 3 * baseline.std_events, baseline.mean_events * 1.5, 2),
+  'errorAnomaly', baseline.baseline_events >= 10
+    and current_bucket.errors > greatest(baseline.mean_errors + 3 * baseline.std_errors, baseline.mean_errors * 1.5, 2)
+)
+from current_bucket cross join baseline;
+$$;
+revoke all on function public.pulsemetrics_anomaly_summary(uuid, timestamptz) from public, anon, authenticated;
+grant execute on function public.pulsemetrics_anomaly_summary(uuid, timestamptz) to service_role;
