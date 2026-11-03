@@ -27,12 +27,12 @@ export function missingSupabaseVariables(): string[] {
 export function getEmbeddingConfig() {
   const baseUrl = process.env.EMBEDDING_API_URL;
   const apiKey = process.env.EMBEDDING_API_KEY;
-  const dimensions = Number(process.env.EMBEDDING_DIMENSIONS || 1536);
+  // The shipped pgvector schema is fixed at 1536 dimensions.
   return {
     configured: Boolean(baseUrl && apiKey),
     baseUrl,
     apiKey,
     model: process.env.EMBEDDING_MODEL || "text-embedding-3-small",
-    dimensions: Number.isInteger(dimensions) && dimensions > 0 ? dimensions : 1536,
+    dimensions: 1536,
   };
 }
