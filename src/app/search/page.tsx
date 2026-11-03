@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { Search, Sparkles, AlertCircle, Clock3 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
@@ -19,7 +19,7 @@ export default function SearchPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  async function search(event: React.FormEvent<HTMLFormElement>) {
+  async function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!query.trim()) return;
     setBusy(true);
