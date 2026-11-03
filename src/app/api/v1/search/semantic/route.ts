@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getWorkspaceAccess } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createEmbedding } from "@/lib/telemetry/embeddings";
+import { createEmbeddings } from "@/lib/telemetry/embeddings";
 import { getEmbeddingConfig } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,8 @@ export async function POST(request: Request) {
   const config = getEmbeddingConfig();
   if (config.configured) {
     try {
-      const embedding = await createEmbedding(queryText);
+      const vectors = await createEmbeddings([queryText]);
+      const embedding = vectors?.[0];
       if (embedding) {
         const { data, error } = await admin.rpc("match_pulsemetrics_events", {
           p_workspace_id: context.workspace.id,
