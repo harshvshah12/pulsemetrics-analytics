@@ -84,6 +84,16 @@ export async function POST(request: Request) {
     return respond({ error: "This API key does not have telemetry:write permission." }, 403);
   }
 
+  const { data: rateAllowed, error: rateError } = await admin.rpc("consume_pulsemetrics_rate_limit", {
+    p_api_key_id: apiKey.id,
+    p_limit: 120,
+  });
+  if (rateError) {
+    console.error("Rate limit check failed:", rateError.message);
+    return respond({ error: "API rate limiting is unavailable. Apply the latest database schema." }, 503);
+  }
+  if (!rateAllowed) return respond({ error: "Rate limit exceeded: 120 requests per minute per API key." }, 429);
+
   const { data: withinQuota, error: quotaError } = await admin.rpc("consume_pulsemetrics_quota", {
     p_workspace_id: apiKey.workspace_id,
     p_count: events.length,
@@ -115,6 +125,7 @@ export async function POST(request: Request) {
 
   if (insertError) {
     console.error("Telemetry persistence failed:", insertError.message);
+    await admin.rpc("release_pulsemetrics_quota", { p_workspace_id: apiKey.workspace_id, p_count: events.length });
     return respond({ error: "Telemetry events could not be persisted." }, 503);
   }
 
