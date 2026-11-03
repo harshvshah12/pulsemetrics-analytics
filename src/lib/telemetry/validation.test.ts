@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { telemetryEventSchema } from "@/lib/telemetry/validation";
+import { telemetryEventSchema } from "./validation";
 
 describe("telemetryEventSchema", () => {
   it("accepts a valid application event and applies safe defaults", () => {
