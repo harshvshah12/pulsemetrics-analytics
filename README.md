@@ -6,7 +6,7 @@ The current implementation replaces the original static dashboard with authentic
 
 ## Stack
 
-- Next.js 15 App Router, React 19, TypeScript and Tailwind CSS
+- Next.js 16 App Router, React 19, TypeScript and Tailwind CSS
 - Supabase Auth with cookie-based server sessions
 - PostgreSQL with workspace-level Row Level Security
 - Supabase Realtime for event inserts
