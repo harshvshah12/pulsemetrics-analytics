@@ -23,7 +23,7 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | Workspac
     }
 
     const admin = createAdminClient();
-    const { data: membership, error: memberError } = await admin
+    let { data: membership, error: memberError } = await admin
       .from("workspace_members")
       .select("workspace_id, role, workspaces(id, name, slug, monthly_event_quota)")
       .eq("user_id", data.user.id)
@@ -35,8 +35,37 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | Workspac
       console.error("Workspace lookup failed:", memberError.message);
       return { ok: false, status: 503, code: "workspace_lookup_failed", error: "Workspace schema is not ready. Apply supabase/schema.sql and try again." };
     }
-    if (!membership || !membership.workspaces) {
-      return { ok: false, status: 403, code: "workspace_missing", error: "No workspace is linked to this account. Sign up again after applying the PulseMetrics schema." };
+    if (!membership) {
+      // Accounts created before the schema was installed may not have received
+      // the Auth trigger. Create their own workspace after verifying the session.
+      const slug = "ws-" + data.user.id.replace(/-/g, "");
+      const displayName = typeof data.user.user_metadata?.workspace_name === "string"
+        ? data.user.user_metadata.workspace_name.trim().slice(0, 80)
+        : (data.user.email?.split("@")[0] || "My") + "'s Workspace";
+      const { data: createdWorkspace, error: createError } = await admin.from("workspaces")
+        .insert({ name: displayName || "My Workspace", slug, owner_id: data.user.id })
+        .select("id, name, slug, monthly_event_quota")
+        .single();
+
+      if (createError || !createdWorkspace) {
+        console.error("Workspace bootstrap failed:", createError?.message);
+        return { ok: false, status: 503, code: "workspace_bootstrap_failed", error: "Your workspace could not be initialized. Check the database setup and try again." };
+      }
+
+      const { error: membershipInsertError } = await admin.from("workspace_members").insert({
+        workspace_id: createdWorkspace.id,
+        user_id: data.user.id,
+        role: "owner",
+      });
+      if (membershipInsertError) {
+        console.error("Workspace membership bootstrap failed:", membershipInsertError.message);
+        return { ok: false, status: 503, code: "workspace_membership_bootstrap_failed", error: "Your workspace membership could not be initialized." };
+      }
+      membership = { workspace_id: createdWorkspace.id, role: "owner", workspaces: createdWorkspace };
+    }
+
+    if (!membership.workspaces) {
+      return { ok: false, status: 403, code: "workspace_missing", error: "No workspace is linked to this account." };
     }
 
     const workspace = Array.isArray(membership.workspaces) ? membership.workspaces[0] : membership.workspaces;
