@@ -19,9 +19,9 @@ type Metrics = {
   totalEvents: number;
   errorCount: number;
   errorRate: number;
-  p50LatencyMs: number;
-  p95LatencyMs: number;
-  p99LatencyMs: number;
+  p50LatencyMs: number | null;
+  p95LatencyMs: number | null;
+  p99LatencyMs: number | null;
   series: { bucket: string; events: number; errors: number }[];
   topServices: { service: string; events: number }[];
   regions: { region: string; events: number }[];
@@ -31,7 +31,7 @@ type Anomaly = { status: string; eventAnomaly?: boolean; errorAnomaly?: boolean;
 
 const EMPTY_METRICS: Metrics = {
   totalEvents: 0, errorCount: 0, errorRate: 0, p50LatencyMs: 0, p95LatencyMs: 0,
-  p99LatencyMs: 0, series: [], topServices: [], regions: [],
+  p99LatencyMs: null, series: [], topServices: [], regions: [],
 };
 
 function formatNumber(value: number) {
@@ -40,6 +40,10 @@ function formatNumber(value: number) {
 
 function formatDate(value: string) {
   return new Date(value).toLocaleString();
+}
+
+function formatLatency(value: number | null) {
+  return value == null ? "—" : value.toFixed(1) + " ms";
 }
 
 export function DashboardClient({ workspaceId, workspaceName, role }: { workspaceId: string; workspaceName: string; role: string }) {
@@ -185,7 +189,7 @@ export function DashboardClient({ workspaceId, workspaceName, role }: { workspac
         {[
           { label: "Events received", value: formatNumber(metrics.totalEvents), icon: Activity, hint: range + " · stored records" },
           { label: "Error events", value: formatNumber(metrics.errorCount), icon: ShieldAlert, hint: metrics.totalEvents ? metrics.errorRate.toFixed(2) + "% of events" : "No data for this period" },
-          { label: "p95 latency", value: metrics.totalEvents ? metrics.p95LatencyMs.toFixed(1) + " ms" : "—", icon: Server, hint: "Based on recorded latency_ms" },
+          { label: "p95 latency", value: formatLatency(metrics.p95LatencyMs), icon: Server, hint: "Based on recorded latency_ms" },
           { label: "Monthly ingestion", value: formatNumber(usage.used) + " / " + formatNumber(usage.quota), icon: KeyRound, hint: usage.percent.toFixed(1) + "% of configured quota" },
           { label: "Active API keys", value: role === "owner" || role === "admin" ? formatNumber(activeKeys) : "Restricted", icon: KeyRound, hint: role === "owner" || role === "admin" ? "Workspace credentials" : "Admin access required" },
         ].map((item) => (
@@ -201,7 +205,7 @@ export function DashboardClient({ workspaceId, workspaceName, role }: { workspac
         <div className="xl:col-span-2 rounded-2xl border border-indigo-950 bg-[#090f20] p-5">
           <div className="flex items-center justify-between gap-4">
             <div><h2 className="font-semibold text-white">Event volume</h2><p className="text-xs text-slate-500 mt-1">Aggregated from persisted telemetry</p></div>
-            <span className="text-xs text-slate-500">p50 {metrics.p50LatencyMs.toFixed(1)}ms · p99 {metrics.p99LatencyMs.toFixed(1)}ms</span>
+            <span className="text-xs text-slate-500">p50 {formatLatency(metrics.p50LatencyMs)} · p99 {formatLatency(metrics.p99LatencyMs)}</span>
           </div>
           {metrics.series.length ? <div className="mt-6 flex items-end gap-2 h-44">
             {metrics.series.map((point) => <div key={point.bucket} title={formatNumber(point.events) + " events"} className="flex-1 h-full flex flex-col justify-end gap-1">
