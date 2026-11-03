@@ -64,8 +64,6 @@ export function DashboardClient({ workspaceId, workspaceName, role }: { workspac
   const [keyError, setKeyError] = useState("");
 
   const loadDashboard = useCallback(async () => {
-    setLoading(true);
-    setError("");
     try {
       const [analyticsResponse, eventsResponse, keysResponse, anomalyResponse] = await Promise.all([
         fetch("/api/v1/analytics/summary?range=" + range, { cache: "no-store" }),
@@ -97,7 +95,10 @@ export function DashboardClient({ workspaceId, workspaceName, role }: { workspac
   useEffect(() => {
     let channel: ReturnType<ReturnType<typeof createBrowserSupabaseClient>["channel"]> | null = null;
     let supabase: ReturnType<typeof createBrowserSupabaseClient> | null = null;
-    try {
+    let disposed = false;
+
+    void Promise.resolve().then(() => {
+      if (disposed) return;
       supabase = createBrowserSupabaseClient();
       channel = supabase.channel("pulsemetrics-events-" + workspaceId)
         .on("postgres_changes", {
@@ -113,10 +114,12 @@ export function DashboardClient({ workspaceId, workspaceName, role }: { workspac
         .subscribe((status) => {
           setConnection(status === "SUBSCRIBED" ? "LIVE" : status === "CHANNEL_ERROR" || status === "TIMED_OUT" ? "DISCONNECTED" : "CONNECTING");
         });
-    } catch {
-      setConnection("UNAVAILABLE");
-    }
+    }).catch(() => {
+      if (!disposed) setConnection("UNAVAILABLE");
+    });
+
     return () => {
+      disposed = true;
       if (supabase && channel) void supabase.removeChannel(channel);
     };
   }, [workspaceId]);
