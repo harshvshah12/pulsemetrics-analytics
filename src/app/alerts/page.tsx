@@ -27,7 +27,6 @@ export default function AlertsPage() {
   const [busy, setBusy] = useState(false);
 
   async function load() {
-    setLoading(true);
     try {
       const response = await fetch("/api/v1/alerts/rules", { cache: "no-store" });
       const payload = await response.json();
