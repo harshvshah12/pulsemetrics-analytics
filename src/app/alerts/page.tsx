@@ -41,7 +41,7 @@ export default function AlertsPage() {
     }
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void Promise.resolve().then(load); }, []);
 
   async function createRule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
