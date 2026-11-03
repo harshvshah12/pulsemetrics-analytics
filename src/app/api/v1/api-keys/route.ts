@@ -26,8 +26,11 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const label = typeof body.label === "string" ? body.label.trim().slice(0, 80) : "";
-  const scope = body.scope === "read" ? "telemetry:read" : "telemetry:write";
   if (!label) return NextResponse.json({ error: "Provide a name for this API key." }, { status: 400 });
+  if (body.scope !== undefined && !["read", "write"].includes(body.scope)) {
+    return NextResponse.json({ error: "Scope must be either read or write." }, { status: 400 });
+  }
+  const scope = body.scope === "read" ? "telemetry:read" : "telemetry:write";
 
   const publicId = randomUUID();
   const secret = randomBytes(32).toString("base64url");
