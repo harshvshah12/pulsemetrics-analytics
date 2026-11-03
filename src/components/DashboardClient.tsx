@@ -90,7 +90,7 @@ export function DashboardClient({ workspaceId, workspaceName, role }: { workspac
     }
   }, [range]);
 
-  useEffect(() => { void loadDashboard(); }, [loadDashboard]);
+  useEffect(() => { void Promise.resolve().then(loadDashboard); }, [loadDashboard]);
 
   useEffect(() => {
     let channel: ReturnType<ReturnType<typeof createBrowserSupabaseClient>["channel"]> | null = null;
