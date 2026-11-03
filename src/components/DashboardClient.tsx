@@ -27,6 +27,7 @@ type Metrics = {
   regions: { region: string; events: number }[];
 };
 type ApiKey = { id: string; key_prefix: string; label: string; scopes: string[]; created_at: string; last_used_at?: string | null; revoked_at?: string | null };
+type Anomaly = { status: string; eventAnomaly?: boolean; errorAnomaly?: boolean; currentEvents?: number; baselineEvents?: number; averageEventsPerWindow?: number; currentErrors?: number; averageErrorsPerWindow?: number };
 
 const EMPTY_METRICS: Metrics = {
   totalEvents: 0, errorCount: 0, errorRate: 0, p50LatencyMs: 0, p95LatencyMs: 0,
@@ -46,6 +47,8 @@ export function DashboardClient({ workspaceId, workspaceName, role }: { workspac
   const [metrics, setMetrics] = useState<Metrics>(EMPTY_METRICS);
   const [events, setEvents] = useState<EventRow[]>([]);
   const [keys, setKeys] = useState<ApiKey[]>([]);
+  const [usage, setUsage] = useState({ used: 0, quota: 1000000, remaining: 1000000, percent: 0 });
+  const [anomaly, setAnomaly] = useState<Anomaly>({ status: "loading" });
   const [connection, setConnection] = useState("CONNECTING");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -60,18 +63,22 @@ export function DashboardClient({ workspaceId, workspaceName, role }: { workspac
     setLoading(true);
     setError("");
     try {
-      const [analyticsResponse, eventsResponse, keysResponse] = await Promise.all([
+      const [analyticsResponse, eventsResponse, keysResponse, anomalyResponse] = await Promise.all([
         fetch("/api/v1/analytics/summary?range=" + range, { cache: "no-store" }),
         fetch("/api/v1/telemetry/events?range=" + range + "&limit=50", { cache: "no-store" }),
         fetch("/api/v1/api-keys", { cache: "no-store" }),
+        fetch("/api/v1/analytics/anomalies", { cache: "no-store" }),
       ]);
       const analytics = await analyticsResponse.json();
       const eventPayload = await eventsResponse.json();
       const keyPayload = await keysResponse.json();
+      const anomalyPayload = await anomalyResponse.json();
       if (!analyticsResponse.ok) throw new Error(analytics.error || "Analytics could not be loaded.");
       if (!eventsResponse.ok) throw new Error(eventPayload.error || "Telemetry events could not be loaded.");
       setMetrics({ ...EMPTY_METRICS, ...(analytics.summary || {}) });
+      setUsage(analytics.usage || { used: 0, quota: 1000000, remaining: 1000000, percent: 0 });
       setEvents(eventPayload.events || []);
+      setAnomaly(anomalyResponse.ok ? (anomalyPayload.anomaly || { status: "insufficient_baseline" }) : { status: "unavailable" });
       if (keysResponse.ok) setKeys(keyPayload.keys || []);
       else if (keysResponse.status !== 403) setKeyError(keyPayload.error || "API keys could not be loaded.");
     } catch (err) {
@@ -179,6 +186,7 @@ export function DashboardClient({ workspaceId, workspaceName, role }: { workspac
           { label: "Events received", value: formatNumber(metrics.totalEvents), icon: Activity, hint: range + " · stored records" },
           { label: "Error events", value: formatNumber(metrics.errorCount), icon: ShieldAlert, hint: metrics.totalEvents ? metrics.errorRate.toFixed(2) + "% of events" : "No data for this period" },
           { label: "p95 latency", value: metrics.totalEvents ? metrics.p95LatencyMs.toFixed(1) + " ms" : "—", icon: Server, hint: "Based on recorded latency_ms" },
+          { label: "Monthly ingestion", value: formatNumber(usage.used) + " / " + formatNumber(usage.quota), icon: KeyRound, hint: usage.percent.toFixed(1) + "% of configured quota" },
           { label: "Active API keys", value: formatNumber(activeKeys), icon: KeyRound, hint: role === "owner" || role === "admin" ? "Workspace credentials" : "Admin access required" },
         ].map((item) => (
           <div key={item.label} className="rounded-2xl border border-indigo-950 bg-[#090f20] p-5">
@@ -213,6 +221,13 @@ export function DashboardClient({ workspaceId, workspaceName, role }: { workspac
             </div>) : <p className="text-sm text-slate-500">Service breakdown appears after the first event arrives.</p>}
           </div>
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-indigo-950 bg-[#090f20] p-5">
+        <div className="flex items-center justify-between gap-3"><div><h2 className="font-semibold text-white">Traffic anomaly signal</h2><p className="text-xs text-slate-500 mt-1">Current five-minute window versus twelve previous windows</p></div>
+          <span className={"text-xs px-2.5 py-1 rounded-md " + (anomaly.status === "analyzed" && (anomaly.eventAnomaly || anomaly.errorAnomaly) ? "bg-rose-500/10 text-rose-300" : anomaly.status === "analyzed" ? "bg-emerald-500/10 text-emerald-300" : "bg-amber-500/10 text-amber-200")}>{anomaly.status === "analyzed" ? (anomaly.eventAnomaly || anomaly.errorAnomaly ? "Anomaly detected" : "Within baseline") : anomaly.status === "insufficient_baseline" ? "Building baseline" : anomaly.status}</span>
+        </div>
+        {anomaly.status === "analyzed" ? <p className="text-sm text-slate-300 mt-4">Last window: {formatNumber(anomaly.currentEvents || 0)} events ({formatNumber(anomaly.currentErrors || 0)} errors). Baseline average: {(anomaly.averageEventsPerWindow || 0).toFixed(1)} events and {(anomaly.averageErrorsPerWindow || 0).toFixed(1)} errors per five minutes.</p> : <p className="text-sm text-slate-400 mt-4">At least ten historical events across the baseline are required before a traffic anomaly can be evaluated. No anomaly is assumed while history is insufficient.</p>}
       </section>
 
       <section className="rounded-2xl border border-indigo-950 bg-[#090f20] overflow-hidden">
