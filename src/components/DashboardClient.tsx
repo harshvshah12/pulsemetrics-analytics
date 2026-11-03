@@ -109,7 +109,23 @@ export function DashboardClient({ workspaceId, workspaceName, role }: { workspac
         }, (payload) => {
           const next = payload.new as EventRow;
           setEvents((current) => [next, ...current.filter((event) => event.id !== next.id)].slice(0, 50));
-          setMetrics((current) => ({ ...current, totalEvents: current.totalEvents + 1 }));
+          const isError = next.severity === "error" || next.severity === "critical" || (next.status_code != null && next.status_code >= 500);
+          setMetrics((current) => {
+            const totalEvents = current.totalEvents + 1;
+            const errorCount = current.errorCount + (isError ? 1 : 0);
+            return {
+              ...current,
+              totalEvents,
+              errorCount,
+              errorRate: totalEvents ? Number((errorCount / totalEvents * 100).toFixed(3)) : 0,
+            };
+          });
+          setUsage((current) => ({
+            ...current,
+            used: current.used + 1,
+            remaining: Math.max(0, current.remaining - 1),
+            percent: current.quota ? Math.min(100, (current.used + 1) / current.quota * 100) : 0,
+          }));
         })
         .subscribe((status) => {
           setConnection(status === "SUBSCRIBED" ? "LIVE" : status === "CHANNEL_ERROR" || status === "TIMED_OUT" ? "DISCONNECTED" : "CONNECTING");
