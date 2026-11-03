@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/env";
+import { safeDigestMatch } from "@/lib/telemetry/signatures";
 
 export type WorkspaceContext = {
   ok: true;
@@ -50,6 +51,58 @@ export async function getWorkspaceContext(): Promise<WorkspaceContext | Workspac
   } catch (error) {
     console.error("Workspace context failed:", error);
     return { ok: false, status: 503, code: "configuration_error", error: "The workspace service is temporarily unavailable." };
+  }
+}
+
+/**
+ * Resolve either a signed-in workspace member or a scoped read-only API key.
+ * A write-only ingestion key cannot be used to read events or analytics.
+ */
+export async function getWorkspaceAccess(request: Request, requiredScope: string): Promise<WorkspaceContext | WorkspaceContextError> {
+  const authorization = request.headers.get("authorization");
+  const token = authorization?.startsWith("Bearer ")
+    ? authorization.slice(7).trim()
+    : request.headers.get("x-api-key");
+
+  if (!token) return getWorkspaceContext();
+  if (!isSupabaseConfigured()) {
+    return { ok: false, status: 503, code: "database_not_configured", error: "PulseMetrics server credentials are not configured." };
+  }
+
+  const match = token.match(/^pm_live_([0-9a-f-]{36})\.([A-Za-z0-9_-]{43})$/i);
+  if (!match) return { ok: false, status: 401, code: "invalid_api_key", error: "The API key is invalid." };
+
+  try {
+    const admin = createAdminClient();
+    const { data: key, error } = await admin.from("api_keys")
+      .select("id, workspace_id, secret_hash, scopes, revoked_at, created_by")
+      .eq("public_id", match[1])
+      .maybeSingle();
+
+    if (error || !key || key.revoked_at || !safeDigestMatch(key.secret_hash, match[2])) {
+      return { ok: false, status: 401, code: "invalid_api_key", error: "The API key is invalid or revoked." };
+    }
+    if (!Array.isArray(key.scopes) || !key.scopes.includes(requiredScope)) {
+      return { ok: false, status: 403, code: "insufficient_scope", error: "This API key does not have the required " + requiredScope + " permission." };
+    }
+
+    const { data: workspace, error: workspaceError } = await admin.from("workspaces")
+      .select("id, name, slug, monthly_event_quota")
+      .eq("id", key.workspace_id)
+      .maybeSingle();
+    if (workspaceError || !workspace) {
+      return { ok: false, status: 404, code: "workspace_not_found", error: "The API key workspace no longer exists." };
+    }
+
+    return {
+      ok: true,
+      user: { id: key.created_by || key.id },
+      workspace: { id: workspace.id, name: workspace.name, slug: workspace.slug, monthly_event_quota: Number(workspace.monthly_event_quota || 1000000) },
+      role: "api-key",
+    };
+  } catch (error) {
+    console.error("API key access check failed:", error);
+    return { ok: false, status: 503, code: "api_key_lookup_failed", error: "API key verification is temporarily unavailable." };
   }
 }
 
